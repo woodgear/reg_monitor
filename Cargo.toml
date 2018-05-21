@@ -1,0 +1,9 @@
+[package]
+name = "reg_monitor"
+version = "0.1.0"
+authors = ["saber.wu <saber.wu@trantect.com>"]
+
+[dependencies]
+winreg = "0.5.0"
+winapi = { version = "0.3", features = ["synchapi","winbase","handleapi"] }
+failure = "0.1.1"
