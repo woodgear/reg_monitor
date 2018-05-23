@@ -8,3 +8,13 @@ winreg = "0.5.0"
 winapi = { version = "0.3", features = ["synchapi","winbase","handleapi"] }
 failure = "0.1.1"
 actix = "0.5.7"
+serde = "1.0"
+serde_derive = "1.0"
+serde_json = "1.0"
+log = "0.3.6"
+actix_derive = "0.2.0"
+simple_logger = "0.5.0"
+
+[dependencies.sugar]
+git = "https://github.com/fangyuanziti/sugar-rs.git"
+rev = "b11884fcdeafc45536e9ca62d9e155140620d119"

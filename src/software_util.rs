@@ -14,10 +14,12 @@ use winapi::um::winbase::INFINITE;
 use winapi::um::handleapi::CloseHandle;
 use winapi::um::winreg::RegCloseKey;
 use failure::err_msg;
+use software_manager::SoftwareInfo;
+use winreg::RegKey;
 
 macro_rules! werr {
     ($e:expr) => (
-        Err(std::io::Error::from_raw_os_error($e as i32))
+        Err(io::Error::from_raw_os_error($e as i32))
     )
 }
 
@@ -44,7 +46,8 @@ fn get_reg_key_with_flag<S: AsRef<OsStr>>(root: HKEY, subpath: S, mask: u32) -> 
     }
 }
 
-#[derive(Debug)]
+#[derive(Message, Debug)]
+#[rtype(result = "()")]
 pub enum SoftWareChangeMsg {
     X64_64_LM,
     X64_64_CU,
@@ -53,12 +56,12 @@ pub enum SoftWareChangeMsg {
     X86_LM,
 }
 
+const uninstall_software_key: &str = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
+const notify_32_mask: u32 = KEY_NOTIFY | KEY_WOW64_32KEY;
+const notify_64_mask: u32 = KEY_NOTIFY | KEY_WOW64_64KEY;
+
 pub fn notify_software_change() -> Result<SoftWareChangeMsg, Error> {
     unsafe {
-        const uninstall_software_key: &str = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
-        const notify_32_mask: u32 = KEY_NOTIFY | KEY_WOW64_32KEY;
-        const notify_64_mask: u32 = KEY_NOTIFY | KEY_WOW64_64KEY;
-
         let x64_32_lm_key = get_reg_key_with_flag(HKEY_LOCAL_MACHINE, uninstall_software_key, notify_32_mask)?;
         let x64_64_lm_key = get_reg_key_with_flag(HKEY_LOCAL_MACHINE, uninstall_software_key, notify_64_mask)?;
         let x64_64_cu_key = get_reg_key_with_flag(HKEY_CURRENT_USER, uninstall_software_key, notify_64_mask)?;
@@ -87,10 +90,60 @@ pub fn notify_software_change() -> Result<SoftWareChangeMsg, Error> {
     }
 }
 
-fn main() {
-    loop {
-        println!("start monitor");
-        let res = notify_software_change();
-        println!("monitor change {:?}", res);
+pub fn get_software_from_reg<S: AsRef<OsStr>>(root: HKEY, subpath: S, mask: u32) -> Vec<SoftwareInfo> {
+    fn clear_quote(data: String) -> String {
+        data.trim_matches(|c| c == '"').to_string()
+    }
+    info!("get_software_from_reg {:?}", subpath.as_ref());
+    RegKey::predef(root).open_subkey_with_flags(subpath, mask)
+        .and_then(|reg_key| {
+            info!("staer enum");
+            let software_list = reg_key
+                .enum_keys()
+                .map(|k| {
+                    info!("{:?}", k);
+                    k
+                })
+                .filter_map(|key| key.ok())
+                .filter_map(|key| reg_key.open_subkey_with_flags(key, KEY_READ).ok())
+                .map(|item| {
+                    info!("staer get data");
+                    let icon: String = item.get_value("DisplayIcon").unwrap_or_default();
+                    let name: String = item.get_value("DisplayName").unwrap_or_default();
+                    let version: String = item.get_value("DisplayVersion").unwrap_or_default();
+                    let vendor: String = item.get_value("Publisher").unwrap_or_default();
+                    let installtime: String = item.get_value("InstallDate").unwrap_or_default();
+                    let installlocation = item.get_value("InstallLocation").unwrap_or_default();
+                    let installlocation = clear_quote(installlocation);
+                    let uninstallstring = item.get_value("uninstallString").unwrap_or_default();
+                    let clear_uninstallstring = clear_quote(uninstallstring);
+                    info!("software name is {}", name);
+                    SoftwareInfo {
+                        name: name.clone(),
+                        caption: name.clone(),
+                        desc: name.clone(),
+                        installtime: installtime.clone(),
+                        installlocation: installlocation.clone(),
+                        version: version.clone(),
+                        vendor: vendor.clone(),
+                        uninstallstring: clear_uninstallstring.clone(),
+                        icon: icon.clone(),
+                    }
+                })
+                .collect();
+            info!("this over ");
+            Ok(software_list)
+        }).unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ::util::*;
+
+    #[test]
+    fn test_get_software_from_reg() {
+        log_init();
+        get_software_from_reg(HKEY_LOCAL_MACHINE, uninstall_software_key, notify_32_mask);
     }
 }
