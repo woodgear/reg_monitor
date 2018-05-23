@@ -7,3 +7,4 @@ authors = ["saber.wu <saber.wu@trantect.com>"]
 winreg = "0.5.0"
 winapi = { version = "0.3", features = ["synchapi","winbase","handleapi"] }
 failure = "0.1.1"
+actix = "0.5.7"
